@@ -1,0 +1,3 @@
+(fp_lib_table
+  (lib (name feet)(type KiCad)(uri ${KIPRJMOD}/feet.pretty)(options "")(descr ""))
+)

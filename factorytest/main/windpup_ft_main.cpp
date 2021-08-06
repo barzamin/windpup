@@ -12,15 +12,6 @@ constexpr uart_port_t modem_uart = UART_NUM_0;
 constexpr int modem_uart_bufsize = (1024 * 2); // 2KiB rx, tx buffers
 static QueueHandle_t modem_uart_queue;
 
-// TODO: store in flash
-#define WIFI_SSID CONFIG_WIFI_SSID
-#define WIFI_PASS CONFIG_WIFI_PASS
-#define WIFI_RETRIES CONFIG_MAX_WIFI_RETRY
-
-static EventGroupHandle_t sig_wifi_event_grp;
-#define WIFI_CONNECTED_BIT BIT0
-#define WIFI_FAIL_BIT      BIT1
-
 void init_uart() {
     uart_config_t modem_uart_cfg = {
         .baud_rate = 9600,
@@ -33,19 +24,27 @@ void init_uart() {
     };
 
     ESP_ERROR_CHECK(uart_param_config(modem_uart, &modem_uart_cfg));
-    ESP_ERROR_CHECK(uart_set_pin(modem_uart, /* tx */ 21, /* rx */ 20, /* rts */ 3, /* cts */ 10));
+    ESP_ERROR_CHECK(uart_set_pin(modem_uart, /* tx */ 21, /* rx */ 20, /* rts */ 0, /* cts */ 0));
 
     ESP_ERROR_CHECK(uart_driver_install(modem_uart, modem_uart_bufsize, modem_uart_bufsize, 10, &modem_uart_queue, 0));
 }
 
 void init_gpio() {
-    gpio_config_t woof_conf;
-    woof_conf.intr_type = GPIO_INTR_DISABLE;
-    woof_conf.mode = GPIO_MODE_OUTPUT;
-    woof_conf.pin_bit_mask = 1ULL << 8; // IO8
-    woof_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-    woof_conf.pull_up_en = GPIO_PULLUP_DISABLE;
-    gpio_config(&woof_conf);
+    gpio_config_t outputs;
+    outputs.intr_type = GPIO_INTR_DISABLE;
+    outputs.mode = GPIO_MODE_OUTPUT;
+    outputs.pin_bit_mask = /* WUF */ (1ULL << 8) | /* RING */ (1ULL << 0) | /* RTS */ (1ULL << 3) | /* DCE */ (1ULL << 2);
+    outputs.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    outputs.pull_up_en = GPIO_PULLUP_DISABLE;
+    gpio_config(&outputs);
+}
+
+void wait_nl() {
+    char c = 0;
+    for(;;) {
+        if (uart_read_bytes(modem_uart, &c, 1, 20/portTICK_RATE_MS) && (c == '\n'))
+            break;
+    }
 }
 
 extern "C" void app_main() {
@@ -54,14 +53,41 @@ extern "C" void app_main() {
     init_gpio();
     init_uart();
 
-    uint16_t lvl = 0;
-    while (1) {
-        const char* test_str = "woof bark\n";
-        uart_write_bytes(modem_uart, test_str, strlen(test_str));
-        
-        gpio_set_level(GPIO_NUM_8, lvl);
-        lvl ^= 1;
+    // gpio_set_level(GPIO_NUM_8, 0); // WUF high
+    // gpio_set_level(GPIO_NUM_0, 1); // RING low
+    // gpio_set_level(GPIO_NUM_3, 1); // RTS low
+    // gpio_set_level(GPIO_NUM_2, 1); // DCE low
 
+    uint16_t lvl= 0;
+    while(true) {
+        gpio_set_level(GPIO_NUM_0, lvl); // DCE low
+        gpio_set_level(GPIO_NUM_8, lvl); // DCE low
+        gpio_set_level(GPIO_NUM_2, lvl); // DCE low
+        gpio_set_level(GPIO_NUM_3, lvl); // DCE low
+        lvl ^= 1;
         vTaskDelay(100 / portTICK_PERIOD_MS);
     }
+
+    char c = 0;
+    while (true) {
+        if (uart_read_bytes(modem_uart, &c, 1, 20 / portTICK_RATE_MS))
+            uart_write_bytes(modem_uart, &c, 1);
+        if (c == '\n') break;
+    }
+
+    wait_nl();
+    printf("set rts\n");
+    gpio_set_level(GPIO_NUM_3, 0);
+
+    wait_nl();
+    printf("set dce\n");
+    gpio_set_level(GPIO_NUM_2, 0);
+
+    wait_nl();
+    printf("set ring\n");
+    gpio_set_level(GPIO_NUM_0, 0);
+
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+    printf("🔄 restart\n");
+    esp_restart();
 }

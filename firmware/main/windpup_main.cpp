@@ -3,6 +3,7 @@
 #include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/event_groups.h"
 #include "esp_system.h"
 #include "esp_spi_flash.h"
 #include "driver/uart.h"
@@ -58,7 +59,7 @@ extern "C" void app_main() {
     while (1) {
         const char* test_str = "woof bark\n";
         uart_write_bytes(modem_uart, test_str, strlen(test_str));
-        
+
         gpio_set_level(GPIO_NUM_8, lvl);
         lvl ^= 1;
 

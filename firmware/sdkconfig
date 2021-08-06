@@ -137,6 +137,14 @@ CONFIG_PARTITION_TABLE_MD5=y
 # end of Partition Table
 
 #
+# Windpup Configuration
+#
+CONFIG_WIFI_SSID="myssid"
+CONFIG_WIFI_PASS="mypassword"
+CONFIG_WIFI_RETRIES=5
+# end of Windpup Configuration
+
+#
 # Compiler options
 #
 CONFIG_COMPILER_OPTIMIZATION_DEFAULT=y

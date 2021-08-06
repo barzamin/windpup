@@ -34,6 +34,7 @@ static EventGroupHandle_t sig_wifi_event_grp;
 
 namespace lt {
     static const char* sta = "wifi-sta";
+    static const char* sock = "socket";
 }
 
 void init_uart() {
@@ -141,21 +142,51 @@ void init_wifi_sta() {
     vEventGroupDelete(sig_wifi_event_grp);
 }
 
+void init_nvs() {
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+}
+
 extern "C" void app_main() {
     printf("w o o f\n");
 
+    init_nvs();
+    ESP_LOGI(lt::sta, "initializing wifi sta");
     init_wifi_sta();
     init_gpio();
     init_uart();
 
-    uint16_t lvl = 0;
-    while (1) {
-        const char* test_str = "woof bark\n";
-        uart_write_bytes(modem_uart, test_str, strlen(test_str));
-
-        gpio_set_level(GPIO_NUM_8, lvl);
-        lvl ^= 1;
-
-        vTaskDelay(100 / portTICK_PERIOD_MS);
+    const char* ip = "137.78.251.144"; // horizons.jpl.nasa.gov
+    const uint16_t port = 6775;
+    struct sockaddr_in dest_addr;
+    dest_addr.sin_addr.s_addr = inet_addr(ip);
+    dest_addr.sin_family = AF_INET:
+    dest_addr.sin_port = htons(port);
+    int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+    if (sock < 0) {
+        ESP_LOGE(lt::sock, "couldn't create socket: errno %d", errno);
+        return;
     }
+
+    ESP_LOGI(lt::sock, "socket created; connecting to %s:%d...", ip, port);
+    int err = connect(sock, (struct sockaddr*)&dest_addr, sizeof(dest_addr));
+    if (err != 0) {
+        ESP_LOGE(lt::sock, "socket unable to connect: errno %d", errno);
+    }
+    ESP_LOGI(lt::sock, "successfully connected :3");
+
+    // uint16_t lvl = 0;
+    // while (1) {
+    //     const char* test_str = "woof bark\n";
+    //     uart_write_bytes(modem_uart, test_str, strlen(test_str));
+
+    //     gpio_set_level(GPIO_NUM_8, lvl);
+    //     lvl ^= 1;
+
+    //     vTaskDelay(100 / portTICK_PERIOD_MS);
+    // }
 }
